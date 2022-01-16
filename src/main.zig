@@ -70,8 +70,6 @@ const startSprite = [32]u8{
 };
 
 const handle_length: f32 = 4.0;
-const START_X = 80.5;
-const START_Y = 30.0;
 
 pub const Stone = struct {
     in_play: bool = false,
