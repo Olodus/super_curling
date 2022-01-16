@@ -31,6 +31,44 @@ const stoneSprite15 = [32]u8{
     0b00000000,0b00000000,
 };
 
+const aimSprite = [32]u8{
+    0b00000111,0b11000000,
+    0b00011001,0b00110000,
+    0b00100001,0b00001000,
+    0b01000001,0b00000100,
+    0b01000001,0b00000100,
+    0b10000001,0b00000010,
+    0b10000001,0b00000010,
+    0b11111111,0b11111110,
+    0b10000001,0b00000010,
+    0b10000001,0b00000010,
+    0b01000001,0b00000100,
+    0b01000001,0b00000100,
+    0b00100001,0b00001000,
+    0b00011001,0b00110000,
+    0b00000111,0b11000000,
+    0b00000000,0b00000000,
+};
+
+const startSprite = [32]u8{
+    0b00000111,0b11000000,
+    0b00011111,0b11110000,
+    0b00111111,0b11111000,
+    0b01111111,0b11111100,
+    0b01111111,0b11111100,
+    0b11111111,0b11111110,
+    0b11111111,0b11111110,
+    0b11111111,0b11111110,
+    0b11111111,0b11111110,
+    0b11111111,0b11111110,
+    0b01111111,0b11111100,
+    0b01111111,0b11111100,
+    0b00111111,0b11111000,
+    0b00011111,0b11110000,
+    0b00000111,0b11000000,
+    0b00000000,0b00000000,
+};
+
 const handle_length: f32 = 4.0;
 const START_X = 80.5;
 const START_Y = 30.0;
@@ -44,7 +82,7 @@ pub const Stone = struct {
     dy: f32,
     drot: f32,
     
-    pub fn draw(this: @This()) bool {
+    pub fn draw(this: @This()) void {
         if (this.in_play) {
             w4.DRAW_COLORS.* = 0x21;
             w4.blit(&stoneSprite15, @floatToInt(i32, this.x - 7.0), @floatToInt(i32, this.y - 7.0), 16, 16, w4.BLIT_1BPP);
@@ -54,23 +92,21 @@ pub const Stone = struct {
                     @floatToInt(i32, this.x + (handle_length * @sin(this.rot))),
                     @floatToInt(i32, this.y + (handle_length * @cos(this.rot)))
             );
-            return true;
         }
-        return false;
     }
 };
 
 fn throwStone(stone: *Stone, dx: f32, dy: f32, drot: f32) void {
     stone.in_play = true;
-    stone.x = START_X;
-    stone.y = START_Y;
+    stone.x = startMark.x;
+    stone.y = startMark.y;
     stone.rot = 0.0;
     stone.dx = dx;
     stone.dy = dy;
     stone.drot = drot;
 }
 
-fn updateStone(stone: *Stone) bool {
+fn updateStone(stone: *Stone) void {
     if (stone.in_play) {
         stone.x = stone.x + stone.dx;
         stone.y = stone.y + stone.dy;
@@ -79,9 +115,7 @@ fn updateStone(stone: *Stone) bool {
         if (stone.x < 0.0 or stone.x > 160.0 or stone.y < 0.0 or stone.y > 160.0) {
             stone.in_play = false;
         }
-        return true;
     }
-    return false;
 }
     
 var stones = [_]Stone{makeUnplayedStones()} ** 16;
@@ -97,13 +131,6 @@ fn makeUnplayedStones() Stone {
     };
 }
 
-var screen = start;
-
-const Screen = enum {
-    start,
-    match,
-};
-
 export fn start() void {
     w4.PALETTE.* = .{0xfff6d3, 0xf9a875, 0xeb6b6f, 0x7c3f58};
 }
@@ -112,30 +139,70 @@ var currentStone: usize = 0;
 
 var cameraY: f32 = 0;
 
+const Mark = struct {
+    x: f32,
+    y: f32,
+    sprite: [*]const u8 = undefined,
+
+    fn draw(this: @This()) void {
+        w4.DRAW_COLORS.* = 0x21;
+        w4.blit(this.sprite, @floatToInt(i32, this.x - 7.0), @floatToInt(i32, this.y - 7.0), 16, 16, w4.BLIT_1BPP);
+    }
+};
+
+const startMark = Mark {.x = 80.0, .y = 120.0, .sprite = &startSprite};
+var aimMark = Mark {.x = 80.0, .y = 40.0, .sprite = &aimSprite};
+
+const Point = struct {
+    x: f32,
+    y: f32,
+};
+
+var timeout: u32 = 0;
+
 export fn update() void {
-    //w4.DRAW_COLORS.* = 2;
     w4.text("Super Curling!", 10, 10);
+
+    timeout = timeout + 1;
 
     const gamepad = w4.GAMEPAD1.*;
     if (gamepad & w4.BUTTON_1 != 0) {
-        throwStone(&stones[currentStone], 0.5, 0.8, 0.2);
-        currentStone = @mod(currentStone + 1, 16);
+        if (timeout > 100) {
+            timeout = 0;
+            const dirX = aimMark.x - startMark.x;
+            const dirY = aimMark.y - startMark.y;
+            const norm = @sqrt(std.math.pow(f32, dirX, 2) + std.math.pow(f32, dirY, 2));
+            const speed = 1.2;
+            throwStone(&stones[currentStone], speed * dirX/norm, speed * dirY/norm, 0.2);
+            currentStone = @mod(currentStone + 1, 16);
+        }
     }
+    if (gamepad & w4.BUTTON_2 != 0) {
 
-    switch (screen) {
-        start => runStartScreen();
-        match => runGameScreen();
+    }
+    if (gamepad & w4.BUTTON_LEFT != 0) {
+        aimMark.x = aimMark.x - 1;
+    }
+    if (gamepad & w4.BUTTON_RIGHT != 0) {
+        aimMark.x = aimMark.x + 1;
+    }
+    if (gamepad & w4.BUTTON_UP != 0) {
+        aimMark.y = aimMark.y - 1;
+    }
+    if (gamepad & w4.BUTTON_DOWN != 0) {
+        aimMark.y = aimMark.y + 1;
     }
 
     for (stones) |*stone| {
-        if(!updateStone(stone)) {
-            break;
-        }
+        updateStone(stone);
     }
     for (stones) |*stone| {
-        if (stone.draw()) {
-            break;
-        }
+        stone.draw();
+    }
+
+    if (timeout > 100) {
+        aimMark.draw();
+        startMark.draw();
     }
 
     //w4.text("Press X to blink", 16, 90);
