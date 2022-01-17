@@ -79,6 +79,8 @@ pub const Stone = struct {
     dx: f32,
     dy: f32,
     drot: f32,
+    radius: f32,
+    drag: f32,
     
     pub fn draw(this: @This()) void {
         if (this.in_play) {
@@ -102,10 +104,23 @@ fn throwStone(stone: *Stone, dx: f32, dy: f32, drot: f32) void {
     stone.dx = dx;
     stone.dy = dy;
     stone.drot = drot;
+    stone.drag = 0.5;
 }
 
 fn updateStone(stone: *Stone) void {
     if (stone.in_play) {
+        stone.dx = stone.dx - stone.drag;
+        if (@fabs(stone.dx) < 0.5) {
+            stone.dx = 0;
+        }
+        stone.dy = stone.dy - stone.drag;
+        if (@fabs(stone.dy) < 0.5) {
+            stone.dy = 0;
+        }
+        stone.drot = stone.drot - stone.drag;
+        if (stone.drot < 0.1) {
+            stone.drot = 0;
+        }
         stone.x = stone.x + stone.dx;
         stone.y = stone.y + stone.dy;
         stone.rot = stone.rot + stone.drot;
@@ -126,6 +141,8 @@ fn makeUnplayedStones() Stone {
         .dx      = 0.0,
         .dy      = 0.0,
         .drot    = 0.0,
+        .radius  = 7.0,
+        .drag    = 0.05,
     };
 }
 
@@ -158,6 +175,21 @@ const Point = struct {
 
 var timeout: u32 = 0;
 
+fn handleCollision(a: *Stone, b: *Stone) void {
+    a.in_play = true;
+    b.in_play = true;
+}
+
+fn collision(a: *Stone, b: *Stone) bool {
+    const dist_x = a.x - b.x;
+    const dist_y = a.y - b.y;
+    const dist = @sqrt(std.math.pow(f32, dist_x, 2) + std.math.pow(f32, dist_y, 2));
+    if (dist < (a.radius + b.radius)) {
+        return true;
+    }
+    return false;
+}
+
 export fn update() void {
     w4.text("Super Curling!", 10, 10);
 
@@ -170,8 +202,8 @@ export fn update() void {
             const dirX = aimMark.x - startMark.x;
             const dirY = aimMark.y - startMark.y;
             const norm = @sqrt(std.math.pow(f32, dirX, 2) + std.math.pow(f32, dirY, 2));
-            const speed = 1.2;
-            throwStone(&stones[currentStone], speed * dirX/norm, speed * dirY/norm, 0.2);
+            const speed = 6.0;
+            throwStone(&stones[currentStone], speed * dirX/norm, speed * dirY/norm, 2.2);
             currentStone = @mod(currentStone + 1, 16);
         }
     }
@@ -192,8 +224,21 @@ export fn update() void {
     }
 
     for (stones) |*stone| {
-        updateStone(stone);
+        if (stone.in_play) {
+            updateStone(stone);
+        }
     }
+    for (stones) |*stone| {
+        if (stone.in_play) {
+            for (stones) |*other_stone| {
+                if (other_stone.in_play and collision(stone, other_stone)) {
+                    w4.text("Press X to blink", 16, 90);
+                    handleCollision(stone, other_stone);
+                }
+            }
+        }
+    }
+
     for (stones) |*stone| {
         stone.draw();
     }
